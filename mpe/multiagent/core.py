@@ -9,6 +9,9 @@ class EntityState(object):
         self.p_vel = None
 
 # state of agents (including communication and internal/mental state)
+## TODO
+## here might be the good place to set up the communication
+## the input EntityState just the x, y of the agent
 class AgentState(EntityState):
     def __init__(self):
         super(AgentState, self).__init__()
@@ -16,6 +19,7 @@ class AgentState(EntityState):
         self.c = None
 
 # action of the agent
+
 class Action(object):
     def __init__(self):
         # physical action
@@ -24,9 +28,11 @@ class Action(object):
         self.c = None
 
 # properties and state of physical world entity
+## TODO
+# Entity can be moved, can collide with other Entities.
 class Entity(object):
     def __init__(self):
-        # name 
+        # name
         self.name = ''
         # properties:
         self.size = 0.050
@@ -70,6 +76,7 @@ class Agent(Entity):
         # communication noise amount
         self.c_noise = None
         # control range
+        ## TODO is the control range means the range that this agent can access?
         self.u_range = 1.0
         # state
         self.state = AgentState()
@@ -77,11 +84,17 @@ class Agent(Entity):
         self.action = Action()
         # script behavior to execute
         self.action_callback = None
+        ## TODO we might not need the at goal because we do not need the agent arrive at same time
+        # at goal
+        self.at_goal = False
+        # first at goal timestep
+        self.timestep_first_reached_goal = None
 
 # multi-agent world
 class World(object):
     def __init__(self):
         # list of agents and entities (can change at execution-time!)
+        # List of agents, list of landmarks
         self.agents = []
         self.landmarks = []
         # communication channel dimensionality
@@ -97,6 +110,11 @@ class World(object):
         # contact response parameters
         self.contact_force = 1e+2
         self.contact_margin = 1e-3
+        ## TODO I guess this is set for mark the actual time when agent arrive
+        # timestep of episode
+        self.time = 0
+
+
 
     # return all entities in the world
     @property
@@ -104,6 +122,7 @@ class World(object):
         return self.agents + self.landmarks
 
     # return all agents controllable by external policies
+    ## TODO do we use this method?
     @property
     def policy_agents(self):
         return [agent for agent in self.agents if agent.action_callback is None]
@@ -115,7 +134,7 @@ class World(object):
 
     # update state of the world
     def step(self):
-        # set actions for scripted agents 
+        # set actions for scripted agents
         for agent in self.scripted_agents:
             agent.action = agent.action_callback(agent, self)
         # gather forces applied to entities
@@ -136,7 +155,7 @@ class World(object):
         for i,agent in enumerate(self.agents):
             if agent.movable:
                 noise = np.random.randn(*agent.action.u.shape) * agent.u_noise if agent.u_noise else 0.0
-                p_force[i] = agent.action.u + noise                
+                p_force[i] = agent.action.u + noise
         return p_force
 
     # gather physical forces acting on entities
@@ -148,10 +167,10 @@ class World(object):
                 [f_a, f_b] = self.get_collision_force(entity_a, entity_b)
                 if(f_a is not None):
                     if(p_force[a] is None): p_force[a] = 0.0
-                    p_force[a] = f_a + p_force[a] 
+                    p_force[a] = f_a + p_force[a]
                 if(f_b is not None):
                     if(p_force[b] is None): p_force[b] = 0.0
-                    p_force[b] = f_b + p_force[b]        
+                    p_force[b] = f_b + p_force[b]
         return p_force
 
     # integrate physical state
@@ -160,7 +179,8 @@ class World(object):
             if not entity.movable: continue
             entity.state.p_vel = entity.state.p_vel * (1 - self.damping)
             if (p_force[i] is not None):
-                entity.state.p_vel += (p_force[i] / entity.mass) * self.dt
+                ##TODO Set new velocity immediately, not additive
+                entity.state.p_vel = (p_force[i] / entity.mass) * self.dt
             if entity.max_speed is not None:
                 speed = np.sqrt(np.square(entity.state.p_vel[0]) + np.square(entity.state.p_vel[1]))
                 if speed > entity.max_speed:
