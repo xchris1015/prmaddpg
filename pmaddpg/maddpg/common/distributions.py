@@ -244,10 +244,12 @@ class SoftMultiCategoricalPd(Pd):  # doesn't work yet
         return tf.concat(x, axis=-1)
     def logp(self, x):
         return tf.add_n([p.logp(px) for p, px in zip(self.categoricals, tf.unstack(x - self.low, axis=len(x.get_shape()) - 1))])
+    def kl_comm(self, other):
+        kl =  tf.add_n([p.kl(q) for p, q in zip([self.categoricals[1]],[ other.categoricals[1]])])
+        return kl
     def kl(self, other):
-        return tf.add_n([
-                p.kl(q) for p, q in zip(self.categoricals, other.categoricals)
-            ])
+        kl =  tf.add_n([p.kl(q) for p, q in zip([self.categoricals[0]],[ other.categoricals[0]])])
+        return kl
     def entropy(self):
         return tf.add_n([p.entropy() for p in self.categoricals])
     def sample(self):
