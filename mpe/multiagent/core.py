@@ -113,6 +113,7 @@ class World(object):
         ## TODO I guess this is set for mark the actual time when agent arrive
         # timestep of episode
         self.time = 0
+        self.communication_channel = None
 
 
 
