@@ -15,10 +15,16 @@ class MultiAgentEnv(gym.Env):
                  observation_callback=None, info_callback=None,
                  done_callback=None, shared_viewer=True):
 
+        #1.  word, agent, n (number of agents), time, and two array action space and observation space
         self.world = world
         self.agents = self.world.policy_agents
+        self.time = 0
         # set required vectorized gym env property
         self.n = len(world.policy_agents)
+        self.action_space = []
+        self.observation_space = []
+
+
         # scenario callbacks
         self.reset_callback = reset_callback
         self.reward_callback = reward_callback
@@ -28,36 +34,62 @@ class MultiAgentEnv(gym.Env):
         # environment parameters
         self.discrete_action_space = True
         # if true, action is a number 0...N, otherwise action is a one-hot N-dimensional vector
+
+        # one-hot mean change the categorical variable to only 0 and 1 for existence.
+        # // see reference : https://hackernoon.com/what-is-one-hot-encoding-why-and-when-do-you-have-to-use-it-e3c6186d008f
+
         self.discrete_action_input = False
         # if true, even the action is continuous, action will be performed discretely
         self.force_discrete_action = world.discrete_action if hasattr(world, 'discrete_action') else False
         # if true, every agent has the same reward
         self.shared_reward = world.collaborative if hasattr(world, 'collaborative') else False
-        self.time = 0
 
-        # configure spaces
+        ## configure spaces
         self.action_space = []
         self.observation_space = []
+        #2. useful, 2.1, 2.2, 2.4, 2.5
         for agent in self.agents:
-            total_action_space = []
+            total_action_space = [] #including agent_action_space, communication_action_space
+            # physical action space
+
+            ##2.1
             # physical action space
             if self.discrete_action_space:
-                u_action_space = spaces.Discrete(world.dim_p * 2 + 1)
+                # dim_p is 2 for 2-dimensional space in this case, we can also change the value on world class, world class also have the communication channel dim
+                # might also to use it when do the language tranining
+
+                # in here the u_action_space is Discrete type, but it is actually a tuple, the result is 5 on the
+                # parenthesis
+                u_action_space = spaces.Discrete(world.dim_p * 2 + 1) # = tuple
             else:
+                ## reference to : https://stackoverflow.com/questions/44404281/openai-gym-understanding-action-space-notation-spaces-box
                 u_action_space = spaces.Box(low=-agent.u_range, high=+agent.u_range, shape=(world.dim_p,), dtype=np.float32)
+
+            #2.2
             if agent.movable:
+                ## u_action_space might be up, down, left and right
                 total_action_space.append(u_action_space)
             # communication action space
+
+            #2.3
+
             if self.discrete_action_space:
-                c_action_space = spaces.Discrete(world.dim_c)
+                ## TODO why not * 2 + 1 as same as the pyhsical action
+                c_action_space = spaces.Discrete(world.dim_c * 2 + 1)
             else:
                 c_action_space = spaces.Box(low=0.0, high=1.0, shape=(world.dim_c,), dtype=np.float32)
+
+            #2.4
+            ## agent can send signal by current setting, thus, we have an communication action space
             if not agent.silent:
                 total_action_space.append(c_action_space)
+
+            #2.5
             # total action space
             if len(total_action_space) > 1:
                 # all action spaces are discrete, so simplify to MultiDiscrete action space
                 if all([isinstance(act_space, spaces.Discrete) for act_space in total_action_space]):
+                   ## check the source code, because we do not have the communcation channel [0, -1], we only have physical action [0,4]
                     act_space = MultiDiscrete([[0, act_space.n - 1] for act_space in total_action_space])
                 else:
                     act_space = spaces.Tuple(total_action_space)
@@ -65,8 +97,14 @@ class MultiAgentEnv(gym.Env):
             else:
                 self.action_space.append(total_action_space[0])
             # observation space
+            ## TODO
+            ## default value for obervation_callback is none, might need to check the senario
             obs_dim = len(observation_callback(agent, self.world))
+            ## check more for the BOX in gym
+            ## really value between - inf to + inf for the observation?
             self.observation_space.append(spaces.Box(low=-np.inf, high=+np.inf, shape=(obs_dim,), dtype=np.float32))
+
+            ## currently an size 0 array
             agent.action.c = np.zeros(self.world.dim_c)
 
         # rendering
@@ -78,10 +116,17 @@ class MultiAgentEnv(gym.Env):
         self._reset_render()
 
     def step(self, action_n):
+        # what is action_n?
+
         obs_n = []
         reward_n = []
         done_n = []
         info_n = {'n': []}
+
+        ## TODO do not think we need team dist and team diff
+        #team_dist_n = []
+        #team_diff_n = []
+
         self.agents = self.world.policy_agents
         # set action for each agent
         for i, agent in enumerate(self.agents):
@@ -91,8 +136,18 @@ class MultiAgentEnv(gym.Env):
         # record observation for each agent
         for agent in self.agents:
             obs_n.append(self._get_obs(agent))
+
+            ## TODO team dist and team diff as well
+            #reward, team_dist, team_diff = self._get_reward(agent)
+            #team_dist_n.append(team_dist)
+            #team_diff_n.append(team_diff)
+
             reward_n.append(self._get_reward(agent))
             done_n.append(self._get_done(agent))
+
+            ## TODO team dist and team diff as well
+            #info_n["team_dist"] = team_dist_n
+            #info_n["team_diff"] = team_diff_n
 
             info_n['n'].append(self._get_info(agent))
 
@@ -142,6 +197,9 @@ class MultiAgentEnv(gym.Env):
 
     # set env action for a particular agent
     def _set_action(self, action, agent, action_space, time=None):
+        ## TODO why do we take first action as the action in here? Is that we specific which action will be using next?
+        # action = action[0]
+        ## TODO seems like action[0] == not move
         agent.action.u = np.zeros(self.world.dim_p)
         agent.action.c = np.zeros(self.world.dim_c)
         # process action
@@ -175,6 +233,7 @@ class MultiAgentEnv(gym.Env):
                     agent.action.u[1] += action[0][3] - action[0][4]
                 else:
                     agent.action.u = action[0]
+            ## TODO why sensitivity is 4.0 not 5.0 like MADDPG?
             sensitivity = 5.0
             if agent.accel is not None:
                 sensitivity = agent.accel
@@ -182,11 +241,17 @@ class MultiAgentEnv(gym.Env):
             action = action[1:]
         if not agent.silent:
             # communication action
+            ## TODO why do we need to init the action with d?
+            if self.force_discrete_action:
+                d = np.argmax(action[0])
+                action[0][:] = 0.0
+                action[0][d] = 1.0
             if self.discrete_action_input:
                 agent.action.c = np.zeros(self.world.dim_c)
                 agent.action.c[action[0]] = 1.0
             else:
-                agent.action.c = action[0]
+                agent.action.c = np.array([np.argmax(action[0])])
+                #agent.action.c = action[0]
             action = action[1:]
         # make sure we used all elements of action
         assert len(action) == 0
@@ -198,19 +263,20 @@ class MultiAgentEnv(gym.Env):
 
     # render environment
     def render(self, mode='human'):
-        if mode == 'human':
-            alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-            message = ''
-            for agent in self.world.agents:
-                comm = []
-                for other in self.world.agents:
-                    if other is agent: continue
-                    if np.all(other.state.c == 0):
-                        word = '_'
-                    else:
-                        word = alphabet[np.argmax(other.state.c)]
-                    message += (other.name + ' to ' + agent.name + ': ' + word + '   ')
-            print(message)
+    ## TODO here is the communication part?
+      #  if mode == 'human':
+      #      alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+      #      message = ''
+      #      for agent in self.world.agents:
+      #          comm = []
+      #          for other in self.world.agents:
+      #              if other is agent: continue
+      #              if np.all(other.state.c == 0):
+      #                  word = '_'
+      #              else:
+      #                  word = alphabet[np.argmax(other.state.c)]
+      #              message += (other.name + ' to ' + agent.name + ': ' + word + '   ')
+      #      print(message)
 
         for i in range(len(self.viewers)):
             # create viewers (if necessary)
