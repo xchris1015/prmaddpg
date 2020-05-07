@@ -78,6 +78,8 @@ class Agent(Entity):
         # control range
         ## TODO is the control range means the range that this agent can access?
         self.u_range = 1.0
+        # agent can only see the range of 1.0 and landmarks
+        self.vision_range = 1.0
         # state
         self.state = AgentState()
         # action
