@@ -2,7 +2,7 @@ import numpy as np
 import random
 
 class ReplayBuffer(object):
-    def __init__(self, size):
+    def __init__(self, size, experience_size, q_lstm_on, p_lstm_on):
         """Create Prioritized Replay buffer.
 
         Parameters
@@ -14,6 +14,11 @@ class ReplayBuffer(object):
         self._storage = []
         self._maxsize = int(size)
         self._next_idx = 0
+
+        self.experience_size = experience_size
+        self.first_ever_episode = True
+        self.q_lstm_on = q_lstm_on
+        self.p_lstm_on = p_lstm_on
 
     def __len__(self):
         return len(self._storage)
