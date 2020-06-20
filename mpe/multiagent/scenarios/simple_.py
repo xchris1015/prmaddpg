@@ -23,7 +23,7 @@ class Scenario(BaseScenario):
             agent.collide = False
             agent.silent = False
         # add landmarks
-        world.landmarks = [Landmark() for i in range(1)]
+        world.landmarks = [Landmark() for i in range(2)]
         for i, landmark in enumerate(world.landmarks):
             landmark.name = 'landmark %d' % i
             landmark.collide = False
@@ -56,18 +56,22 @@ class Scenario(BaseScenario):
         cost = 0.0
         for a in world.agents:
             # Penalize on distance
-            cost -= np.sum(np.square(a.state.p_pos - world.landmarks[0].state.p_pos))
+            cost -= np.sum(np.square(a.state.p_pos - a.target_landmark.state.p_pos))
+            #cost -= np.sum(np.square(a.state.p_pos - world.landmarks[0].state.p_pos))
+            print("The Target Landmark for :", a, "is :", a.target_landmark)
 
+
+        ## team difference for rmaddpg
         # add to tracker
-        print("adding team dist")
-        agent.tracker.record_information("team_dist_reward", np.array(cost))
+        #print("adding team dist")
+        #agent.tracker.record_information("team_dist_reward", np.array(cost))
 
-        other_agent = world.agents[0] if world.agents[0].name != agent.name else world.agents[1]
-        dist1= np.linalg.norm(agent.state.p_pos - world.landmarks[0].state.p_pos)
-        dist2= np.linalg.norm(other_agent.state.p_pos - world.landmarks[0].state.p_pos)
-        team_diff =  abs(dist1 - dist2)
-        cost -= team_diff
-        agent.tracker.record_information("team_diff_reward", np.array(team_diff))
+        #other_agent = world.agents[0] if world.agents[0].name != agent.name else world.agents[1]
+        #dist1= np.linalg.norm(agent.state.p_pos - world.landmarks[0].state.p_pos)
+        #dist2= np.linalg.norm(other_agent.state.p_pos - world.landmarks[0].state.p_pos)
+        #team_diff =  abs(dist1 - dist2)
+        #cost -= team_diff
+        #agent.tracker.record_information("team_diff_reward", np.array(team_diff))
         return cost
 
 
@@ -76,7 +80,7 @@ class Scenario(BaseScenario):
         world.communication_budget -= 0.01
 
     def done(self, agent, world):
-        return np.linalg.norm(agent.state.p_pos - world.landmarks[0].state.p_pos) < 0.05
+        return np.linalg.norm(agent.state.p_pos - agent.target_landmark.state.p_pos) < 0.05
 
     def observation(self, agent, world):
         # get reference to other agent
@@ -86,6 +90,7 @@ class Scenario(BaseScenario):
         for entity in world.landmarks:
             entity_pos.append(entity.state.p_pos - agent.state.p_pos)
         # get communication
+        ## TODO use this one as communication channel
         communication = []
         for a in world.agents:
             if a.name == agent.name: continue # if it's the current agent, skip
@@ -103,11 +108,11 @@ class Scenario(BaseScenario):
         comm_budget = [np.array([world.communication_budget])]
         old_comm = [other_agent.state.c, dist]
         # Partial obs
-        # obs = np.concatenate([agent.state.p_pos] + [world.landmarks[0].state.p_pos] + communication + comm_budget)
-        # obs = np.concatenate([agent.state.p_pos] + entity_pos + communication + comm_budget)
+        #obs = np.concatenate([agent.state.p_pos] + [world.landmarks[0].state.p_pos] + communication + comm_budget)
+        obs = np.concatenate([agent.state.p_pos] + entity_pos + communication + comm_budget)
 
         # Fully obs
-        obs = np.concatenate([agent.state.p_pos] + [world.landmarks[0].state.p_pos] + [other_agent.state.p_pos] + [other_agent.state.p_pos] + comm_budget)
+        #obs = np.concatenate([agent.state.p_pos] + [world.landmarks[0].state.p_pos] + [other_agent.state.p_pos] + [other_agent.state.p_pos] + comm_budget)
         # obs = np.concatenate([agent.state.p_pos] + [other_agent.state.p_pos] + [world.landmarks[0].state.p_pos]+ comm_budget + communication)
         # obs = np.concatenate([agent.state.p_pos] + [other_agent.state.p_pos] + [world.landmarks[0].state.p_pos]+ comm_budget + old_comm)
         return np.array([obs])
